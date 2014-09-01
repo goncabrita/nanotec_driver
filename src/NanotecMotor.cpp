@@ -97,14 +97,24 @@ int nanotec::NanotecMotor::getter(std::string symbol)
     int value;
 
     command = boost::lexical_cast<std::string>(id_);
-    if(symbol.length() == 1) command += "Z" + symbol;
-    else command += symbol;
+    if(symbol.length() == 1) command += "Z" + symbol + "\r";
+    else command += symbol + "\r";
 
     if( !port_->sendCommand(command, reply) )
         NANOTEC_EXCEPT(nanotec::Exception, "Failed to send command: %s. %s (errno = %d).", command.c_str(), strerror(errno), errno);
 
-    if(symbol.length() == 1) command = boost::lexical_cast<std::string>(id_) + symbol + "%d";
-    else command += "%d";
+    // Delete trailing zeroes
+    if(reply.at(0) == '0')
+    {
+        int i=1;
+        while(reply.at(i) == '0')i++;
+        reply.erase(reply.begin(), reply.begin()+i);
+    }
+
+    if(symbol.compare("$") == 0) command = boost::lexical_cast<std::string>(id_) + symbol + "%d" + "\r";
+    else if(symbol.length() == 1) command = boost::lexical_cast<std::string>(id_) + "Z" + symbol + "%d" + "\r";
+    else command = boost::lexical_cast<std::string>(id_) + symbol + "%d\r";
+
     if( sscanf(reply.c_str(), command.c_str(), &value) != 1)
         NANOTEC_EXCEPT(nanotec::Exception, "Failed to assert reply: %s. %s (errno = %d).", reply.c_str(), strerror(errno), errno);
 
@@ -279,7 +289,8 @@ void nanotec::NanotecMotor::getFeedRate(int & numerator, int & denominator)
 
 void nanotec::NanotecMotor::resetPositionError(int error)
 {
-    setter("D", error, -100000000, 100000000);
+    if(error == 0) sender("D");
+    else setter("D", error, -100000000, 100000000);
 }
 
 int nanotec::NanotecMotor::getErrorMemory(int location)
